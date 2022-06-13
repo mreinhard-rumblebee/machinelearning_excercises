@@ -14,7 +14,6 @@ import matplotlib.pyplot as plt
 class GymEnvironment:
     def __init__(self, env_id, monitor_dir, max_timesteps=100000):
         self.max_timesteps = max_timesteps
-
         self.env = gym.make(env_id)
 
     def trainDQN(self, agent, no_episodes):
