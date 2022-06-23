@@ -24,7 +24,7 @@ class GymEnvironment:
             state = self.env.reset().reshape(1, self.env.observation_space.shape[0])
             states, actions, G_lams, values_global, logprobs = [], [], [], [], []
 
-            for n in range(0, self.actors):
+            for n in range(0, agent.actors):
                 state = self.env.reset().reshape(1, self.env.observation_space.shape[0])
                 # Problem: if done==1, the pole will always fall, so a reset might be good ???
                 tot_rew = 0
@@ -51,23 +51,22 @@ class GymEnvironment:
                     state = next_state
 
                     if (done == True or t == self.max_timesteps) and training == True:
-                        # TODO: Call function for calculation and storage of advantages
                         # Calculate advantages when the function breaks or the last iteration is reached
+                        # TODO: Call function for calculation and storage of advantages
                         G_lams.extend(agent.calc_advantage(values, rewards, 0, t))
-                        values_global.extend(values)
-
-                        gradients.append()
                         # TODO: Store targets for your value function update
-
+                        values_global.extend(values)
                         break
                 rew.append(tot_rew)
 
             # TODO: If training, call function to update policy function weights using clipping
+            agent.update_policy_parameters(states,actions,logprobs,G_lams,values_global)
             # TODO: If training, Call function to update value function weights
+            agent.update_value_parameters(G_lams,values_global)
+            # TODO: Implement here a function that evaulates the agent's performance for every x episodes by
+            #  calling PPO directly and returns an average of total rewards for 100 runs, if your objective is
+            #  reached, you can terminate training
 
-            # TODO: Implement here a function that evaulates the agent's performance for every x episodes by -- NOT YET
-            # calling runDQN directly and returns an average of total rewards for 100 runs, if your objective is
-            # reached, you can terminate training
         return rew
 
 
@@ -84,6 +83,28 @@ def discounted_cumulative_sums(x, discount):
     return scipy.signal.lfilter([1], [1, float(-discount)], x[::-1], axis=0)[::-1]
 
 
+class actor(tf.keras.Model):
+  def __init__(self):
+    super().__init__()
+    self.d1 = tf.keras.layers.Dense(4,activation='relu')
+    self.a = tf.keras.layers.Dense(2,activation=None)
+
+  def call(self, input_data):
+    x = self.d1(input_data)
+    a = self.a(x)
+    return a
+
+class critic(tf.keras.Model):
+  def __init__(self):
+    super().__init__()
+    self.d1 = tf.keras.layers.Dense(4,activation='relu')
+    self.v = tf.keras.layers.Dense(1, activation = None)
+
+  def call(self, input_data):
+    x = self.d1(input_data)
+    v = self.v(x)
+    return v
+
 class PPO_Agent:
     def __init__(self, no_of_states, no_of_actions):
         self.state_size = no_of_states
@@ -93,18 +114,22 @@ class PPO_Agent:
         self.gamma = 0.9  # discount rate
         self.lam = 0.6  # lambda for TD(lambda)
         self.clip_ratio = 0.5  # Clipping ratio for calculating L_clip
+        self.lr = 0.0001 # learning rate
         self.actors = 100  # Number of parallel actors
 
-        self.actor = self.nn_model(self.state_size, self.action_size)
-        self.critic = self.nn_model(self.state_size, 1)
+        self.actor = actor()
+        self.critic = critic()
+        #self.actor = self.nn_model(self.state_size, self.action_size)
+        #self.critic = self.nn_model(self.state_size, 1)
 
     def select_action(self, state):
         # TODO: Implement action selection, i.e., sample an action from policy pi
-        logit = self.actor.predict(state)[0]
+        logit = self.actor(np.array([state])).numpy()
         action = tf.squeeze(tf.random.categorical(logit, 1), axis=1)
-        return logit, action
+        return logit, action.numpy()[0]
 
     def calc_advantage(self, values, rew, n, T):
+        # TODO: Implement here the calculation of the advantage, e.g., using TD-lambda or eligibility traces
         # Using offline forward-looking TD(lambda) with one update per episode
         G_lam = []
         for t in range(T):
@@ -139,27 +164,14 @@ class PPO_Agent:
         # Consider normalizing the advantages:
         # TD = (TD - np.mean(TD)) / (np.std(TD) + 1e-10)
 
-        # TODO: Implement here the calculation of the advantage, e.g., using TD-lambda or eligibility traces
 
     def nn_model(self, state_size, output_size):
-        layer_input = Input(state_size)
-        layer_one = Dense(512, input_shape=state_size, activation="relu", kernel_initializer='random_normal',
-                          bias_initializer='zeros')(layer_input)
-        layer_two = Dense(512, activation="relu", kernel_initializer='random_normal', bias_initializer='zeros')(
-            layer_one)
-        layer_three = Dense(512, activation="relu", kernel_initializer='random_normal', bias_initializer='zeros')(
-            layer_two)
-        layer_four = Dense(output_size, activation="linear", kernel_initializer='random_normal',
-                           bias_initializer='zeros')(layer_three)
-
-        model = Model(inputs=layer_input, outputs=layer_four)
-        model.compile(loss="mse", metrics=["accuracy"])
-        print(model)
         # TODO: Define the neural network here, make sure that you account for the different requirements of the value
-        # function and policy function approximation in the in- and outputs
+        return
 
     # Here newly observed transitions are stored in the experience replay buffer
     def record(self):  # TODO: add the relevant input arguments that you will need to store
+        return
 
     # TODO: Define here arrays in which you will store all the information that you need in the advantage
     #  calculation, e.g., rewards, values, states, etc.
@@ -183,12 +195,12 @@ class PPO_Agent:
     # This is a wrapper that when adding it in front of a function, consisting only of tf syntax,
     # can improve speed
     @tf.function
-    def update_value_parameters(self, alpha, G_lams, values_global):
+    def update_value_parameters(self, G_lams, values_global):
 
         with tf.GradientTape() as tape:  # Record operations for automatic differentiation.
             # TODO: Use the advantages and calculated policies to calculated the clipping function here and calculate
             #  the loss function
-            val_loss = alpha * tf.keras.metrics.mean_squared_error(G_lams, values_global)
+            val_loss = tf.keras.metrics.mean_squared_error(G_lams, values_global)
 
         val_grads = tape.gradient(val_loss, self.critic.trainable_variables)
         self.critic.apply_gradients(zip(val_grads, self.critic.trainable_variables))
