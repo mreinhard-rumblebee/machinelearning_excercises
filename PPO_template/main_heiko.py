@@ -1,7 +1,6 @@
-from keras.models import Sequential, Model
-from keras.layers import Dense, Input
+from tensorflow import keras
+from keras import layers
 import tensorflow as tf
-from keras import backend as K
 import gym
 import numpy as np
 import scipy.signal
@@ -19,7 +18,7 @@ class GymEnvironment:
 
     def runPPO(self, agent, no_episodes, training=False):
 
-        rew = np.zeros(no_episodes)
+        rew = []
         for episode in range(no_episodes):
             state = self.env.reset().reshape(1, self.env.observation_space.shape[0])
             states, actions, G_lams, values_global, logprobs = [], [], [], [], []
@@ -45,7 +44,8 @@ class GymEnvironment:
                         # TODO: Store relevant transition information such as rewards, values, etc. that you will need in
                         #  the calculation of the advantages later
                         rewards.append(reward)
-                        values.append(agent.critic.predict(state)[0])
+                        #values.append(agent.critic.predict(state)[0])
+                        values.append(agent.critic(state))
                         logprobs.append(policy_probabilities(logit, action))
 
                     state = next_state
@@ -73,7 +73,8 @@ class GymEnvironment:
 def policy_probabilities(logit, action):
     # TODO: Compute probabilities of taking actions a by using the outputs of actor NN (the logits)
     # softmax calculation
-    logprobs = tf.math.log(np.exp(logit) / np.sum(np.exp(logit)))
+    #logprobs = tf.math.log(np.exp(logit) / np.sum(np.exp(logit)))
+    logprobs = tf.nn.log_softmax(logit)
     logprob = tf.reduce_sum(tf.one_hot(action, 2) * logprobs, axis=1)
     return logprob
 
@@ -105,6 +106,7 @@ class critic(tf.keras.Model):
     v = self.v(x)
     return v
 
+
 class PPO_Agent:
     def __init__(self, no_of_states, no_of_actions):
         self.state_size = no_of_states
@@ -114,17 +116,18 @@ class PPO_Agent:
         self.gamma = 0.9  # discount rate
         self.lam = 0.6  # lambda for TD(lambda)
         self.clip_ratio = 0.5  # Clipping ratio for calculating L_clip
-        self.lr = 0.0001 # learning rate
+        self.lr = 0.0001  # learning rate
         self.actors = 100  # Number of parallel actors
 
-        self.actor = actor()
-        self.critic = critic()
-        #self.actor = self.nn_model(self.state_size, self.action_size)
-        #self.critic = self.nn_model(self.state_size, 1)
+        # self.actor = actor()
+        # self.critic = critic()
+        self.actor = self.nn_model(self.state_size, self.action_size)
+        self.critic = self.nn_model(self.state_size, 1)
 
     def select_action(self, state):
         # TODO: Implement action selection, i.e., sample an action from policy pi
-        logit = self.actor(np.array([state])).numpy()
+        # logit = self.actor(np.array([state])).numpy()
+        logit = self.actor(state).numpy()
         action = tf.squeeze(tf.random.categorical(logit, 1), axis=1)
         return logit, action.numpy()[0]
 
@@ -141,7 +144,6 @@ class PPO_Agent:
                 rew_list.append((acc_rew + V_tmp) * self.lam ** k)
 
             G_t = (1 - self.lam) * np.sum(rew_list[:-1]) + rew_list[-1]
-
             G_lam.append(G_t)
 
             """
@@ -159,15 +161,21 @@ class PPO_Agent:
             G_lam = (1-self.lam) * G_disc + G_n[T-t] * self.lam**(T-t-1)
             """
 
+            # Consider normalizing the advantages:
+            # TD = (TD - np.mean(TD)) / (np.std(TD) + 1e-10)
             return G_lam
 
-        # Consider normalizing the advantages:
-        # TD = (TD - np.mean(TD)) / (np.std(TD) + 1e-10)
-
-
-    def nn_model(self, state_size, output_size):
+    def nn_model(self, state_size, output_size, ):
         # TODO: Define the neural network here, make sure that you account for the different requirements of the value
-        return
+        model = keras.Sequential(
+            [
+                layers.Dense(state_size, activation='relu', name='layer1'),
+                # maybe add more layers...
+                layers.Dense(output_size, activation=None, name='layer2')
+            ]
+        )
+
+        return model
 
     # Here newly observed transitions are stored in the experience replay buffer
     def record(self):  # TODO: add the relevant input arguments that you will need to store
@@ -183,11 +191,12 @@ class PPO_Agent:
         with tf.GradientTape() as tape:  # Record operations for automatic differentiation.
             # TODO: Use the advantages and calculated policies to calculated the clipping function here and calculate
             #  the loss function
-            ratio = tf.exp(policy_probabilities(self.actor.predict(states)[0], actions) - logprobs)
+            # ratio = tf.exp(policy_probabilities(self.actor.predict(states)[0], actions) - logprobs)
+            ratio = tf.exp(policy_probabilities(self.actor(states), actions) - logprobs)
 
-            advantages = list(map(lambda x, y: x - y, G_lams, values_global))
-            clip = K.clip(ratio, min_value=1 - self.clip_ratio, max_value=1 + self.clip_ratio) * advantages
-            pol_loss = -K.mean(K.minimum(ratio * advantages, clip))
+            advantages = list(map(lambda x, y: x - y, G_lams, tf.dtypes.cast(values_global, tf.float32)))
+            clip = keras.backend.clip(ratio, min_value=1 - self.clip_ratio, max_value=1 + self.clip_ratio) * advantages
+            pol_loss = -keras.backend.mean(keras.minimum(ratio * advantages, clip))
 
         pol_grads = tape.gradient(pol_loss, self.actor.trainable_variables)
         self.actor.apply_gradients(zip(pol_grads, self.actor.trainable_variables))
