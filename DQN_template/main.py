@@ -24,38 +24,41 @@ class GymEnvironment:
         agent.model.save_weights("cartpole-v0.h5", overwrite=True)
 
     def runDQN(self, agent, no_episodes, training=False):
-        count = 0
         rew = np.zeros(no_episodes)
         for episode in range(no_episodes):
-            state = self.env.reset().reshape(1, self.env.observation_space.shape[0])
-            tot_rew = 0
-            for t in range(self.max_timesteps):
-                # TODO: Define the main DQN loop here. The observation of a transition is
-                # already implemented. Use the functions defined in the agent's class.
-
-                action = agent.select_action(state, training)
-
-                # Execute the action and observe the transition which the environment gives you, i.e., next state
-                # and reward
+            state = self.env.reset()
+            state = np.reshape(state, [1, agent.state_size])
+            done = False
+            i = 0
+            rwd = 0
+            while not done:
+                self.env.render()
+                action = agent.select_action(state)
                 next_state, reward, done, _ = self.env.step(action)
-                next_state = next_state.reshape(1, self.env.observation_space.shape[0])
+                next_state = np.reshape(next_state, [1,  agent.state_size])
+                rwd += reward
+                if not done or i == self.max_timesteps - 1:
+                    reward = reward
+
+                else:
+                    reward = -100
                 agent.record(state, action, reward, next_state, done)
-                count += 1
-                agent.update_weights(count)
-                tot_rew += reward
+                state = next_state
+                i += 1
+                agent.update_weights(i)
 
                 if done:
                     break
                 # agent.update_weights(t)
 
-            rew[episode] = tot_rew
+            rew[episode] = rwd
 
             # TODO: Implement here a function that evaulates the agent's performance for every x episodes by
             # calling runDQN directly and returns an average of total rewards for 100 runs, if your objective is
             # reached, you can terminate training
 
             print("episode: {}/{} | score: {} | e: {:.3f}".format(
-                episode + 1, no_episodes, tot_rew, agent.epsilon))
+                episode + 1, no_episodes, rwd, agent.epsilon))
         return rew
 
 
@@ -70,8 +73,7 @@ class DQN_Agent:
         self.epsilon = 1.0  # eps-greedy exploration rate
         self.batch_size = 64  # maximum size of the batches sampled from memory
         self.epsilon_min = 0.01
-        self.epsilon_decay = 0.9
-        self.trainS = 300
+        self.epsilon_decay = 0.99
 
 
         # TODO: Initialize the neural network models of weight and target weight networks
@@ -79,7 +81,7 @@ class DQN_Agent:
         self.target_model = self.nn_model((no_of_states,), no_of_actions, load_old_model)
 
         # TODO: Define times at which target weights are synchronized
-        self.target_model_time = 100
+        self.target_model_time = 12
 
         # Maximal size of memory buffer
         self.memory = deque(maxlen=2000)
@@ -87,11 +89,10 @@ class DQN_Agent:
     def nn_model(self, state_size, action_size, load_old_model):
         # TODO: Define your neural network
         layer_input = Input(state_size)
-        layer_one = Dense(512, input_shape=state_size, activation="relu", kernel_initializer='random_normal',
-                          bias_initializer='zeros')(layer_input)
-        layer_two = Dense(512, activation="relu", kernel_initializer='random_normal', bias_initializer='zeros')(layer_one)
-        layer_three = Dense(512, activation="relu", kernel_initializer='random_normal', bias_initializer='zeros')(layer_two)
-        layer_four = Dense(action_size, activation="linear", kernel_initializer='random_normal', bias_initializer='zeros')(layer_three)
+        layer_one = Dense(512, input_shape=state_size, activation="relu", kernel_initializer='he_uniform')(layer_input)
+        layer_two = Dense(250, activation="relu", kernel_initializer='he_uniform')(layer_one)
+        layer_three = Dense(30, activation="relu", kernel_initializer='he_uniform')(layer_two)
+        layer_four = Dense(action_size, activation="linear", kernel_initializer='he_uniform')(layer_three)
 
         model = Model(inputs=layer_input, outputs=layer_four)
         model.compile(loss="mse", optimizer=tf.keras.optimizers.Adam(lr=0.00025), metrics=["accuracy"])
@@ -116,9 +117,8 @@ class DQN_Agent:
     # TODO maybe implement dynamic epsilon
     def record(self, state, action, reward, next_state, done):
         self.memory.append((state, action, reward, next_state, done))
-        if len(self.memory) > self.trainS:
-            if self.epsilon > self.epsilon_min:
-                self.epsilon *= self.epsilon_decay
+        if self.epsilon > self.epsilon_min:
+            self.epsilon *= self.epsilon_decay
 
     # TODO Rework this function!
     def update_weights(self, t):  # t for time stepp at wich target moddle will be updated
@@ -126,7 +126,7 @@ class DQN_Agent:
         if len(self.memory) < self.batch_size:
             return
         # Randomly sample minibatch from the memory
-        minibatch = random.sample(self.memory, self.batch_size)
+        minibatch = random.sample(self.memory, min(self.batch_size, self.batch_size))
 
         state = np.zeros((self.batch_size, self.state_size))
         next_state = np.zeros((self.batch_size, self.state_size))
@@ -144,7 +144,7 @@ class DQN_Agent:
 
         # do batch prediction to save speed
         target = self.model.predict(state)
-        target_next = self.target_model.predict(next_state)
+        target_next = self.model.predict(next_state)
         target_val = self.target_model.predict(next_state)
 
         for i in range(self.batch_size):
@@ -153,12 +153,13 @@ class DQN_Agent:
                 target[i][action[i]] = reward[i]
             else:
                 a = np.argmax(target_next[i])
+                # target Q Network evaluates the action
+                # Q_max = Q_target(s', a'_max)
                 target[i][action[i]] = reward[i] + self.gamma * (target_val[i][a])
-                #target[i][action[i]] = reward[i] + self.gamma * (np.amax(target_next[i]))
-
 
         # Train the Neural Network with batches
         self.model.fit(state, target, batch_size=self.batch_size, verbose=0)
+
         if (t % self.target_model_time) == 0:
             self.target_model.set_weights(self.model.get_weights())
 
@@ -197,7 +198,7 @@ if __name__ == "__main__":
         # Here you can watch a simulation on how your agent performs after being trained.
         # NOTE that this part will try to load an existing set of weights, therefore set visualize_agent to TRUE, when you
         # already saved a set of weights from a training session
-        visualize_agent = False
+        visualize_agent = True
     if visualize_agent == True:
         env = gym.make('CartPole-v0')
         load_model = 1
