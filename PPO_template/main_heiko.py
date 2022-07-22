@@ -1,6 +1,6 @@
+import tensorflow as tf
 from tensorflow import keras
 from keras import layers
-import tensorflow as tf
 import gym
 import numpy as np
 import scipy.signal
@@ -59,10 +59,12 @@ class GymEnvironment:
                         break
                 rew.append(tot_rew)
 
+            # TODO: If training, Call function to update value function weights
+            agent.update_value_parameters(G_lams, values_global)
             # TODO: If training, call function to update policy function weights using clipping
             agent.update_policy_parameters(states,actions,logprobs,G_lams,values_global)
             # TODO: If training, Call function to update value function weights
-            agent.update_value_parameters(G_lams,values_global)
+            #agent.update_value_parameters(G_lams,values_global)
             # TODO: Implement here a function that evaulates the agent's performance for every x episodes by
             #  calling PPO directly and returns an average of total rewards for 100 runs, if your objective is
             #  reached, you can terminate training
@@ -83,7 +85,7 @@ def policy_probabilities(logit, action):
 def discounted_cumulative_sums(x, discount):
     return scipy.signal.lfilter([1], [1, float(-discount)], x[::-1], axis=0)[::-1]
 
-
+"""
 class actor(tf.keras.Model):
   def __init__(self):
     super().__init__()
@@ -105,7 +107,7 @@ class critic(tf.keras.Model):
     x = self.d1(input_data)
     v = self.v(x)
     return v
-
+"""
 
 class PPO_Agent:
     def __init__(self, no_of_states, no_of_actions):
@@ -163,17 +165,19 @@ class PPO_Agent:
 
             # Consider normalizing the advantages:
             # TD = (TD - np.mean(TD)) / (np.std(TD) + 1e-10)
-            return G_lam
+        return G_lam
 
     def nn_model(self, state_size, output_size, ):
         # TODO: Define the neural network here, make sure that you account for the different requirements of the value
-        model = keras.Sequential(
-            [
-                layers.Dense(state_size, activation='relu', name='layer1'),
-                # maybe add more layers...
-                layers.Dense(output_size, activation=None, name='layer2')
-            ]
-        )
+        # Define NN architecture
+        input_layer = layers.Input(shape = (state_size,))
+        layer_1 = layers.Dense(128, activation = "relu")(input_layer)
+        layer_2 = layers.Dense(128, activation = "relu")(layer_1)
+        output_layer = layers.Dense(output_size, activation = "relu")(layer_2)
+        model = keras.Model(inputs = input_layer, outputs = output_layer)
+
+        # Compile model
+        model.compile(optimizer = "adam", loss = "mse")
 
         return model
 
