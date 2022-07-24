@@ -17,13 +17,13 @@ class GymEnvironment:
 
         self.env = gym.make(env_id)
 
-    def trainDQN(self, agent, no_episodes):
-        self.runDQN(agent, no_episodes, training=True)
+    def trainDQN(self, agent, no_episodes, visualize_agent=False ):
+        self.runDQN(agent, no_episodes, training=True, visualize_agent=visualize_agent )
 
         # Automatically save weights of trained network
         agent.model.save_weights("cartpole-v0.h5", overwrite=True)
 
-    def runDQN(self, agent, no_episodes, training=False):
+    def runDQN(self, agent, no_episodes, training=False, visualize_agent=False):
         rew = np.zeros(no_episodes)
         for episode in range(no_episodes):
             state = self.env.reset()
@@ -32,7 +32,8 @@ class GymEnvironment:
             i = 0
             rwd = 0
             while not done:
-                self.env.render()
+                if visualize_agent:
+                    self.env.render()
                 action = agent.select_action(state)
                 next_state, reward, done, _ = self.env.step(action)
                 next_state = np.reshape(next_state, [1,  agent.state_size])
@@ -45,7 +46,8 @@ class GymEnvironment:
                 agent.record(state, action, reward, next_state, done)
                 state = next_state
                 i += 1
-                agent.update_weights(i)
+                if training:
+                    agent.update_weights(i)
 
                 if done:
                     break
@@ -56,9 +58,12 @@ class GymEnvironment:
             # TODO: Implement here a function that evaulates the agent's performance for every x episodes by
             # calling runDQN directly and returns an average of total rewards for 100 runs, if your objective is
             # reached, you can terminate training
-
-            print("episode: {}/{} | score: {} | e: {:.3f}".format(
-                episode + 1, no_episodes, rwd, agent.epsilon))
+            if training:
+                print("episode: {}/{} | score: {} | e: {:.3f}".format(
+                    episode + 1, no_episodes, rwd, agent.epsilon))
+            else:
+                print("episode: {}/{} | score: {}".format(
+                    episode + 1, no_episodes, rwd))
         return rew
 
 
@@ -178,12 +183,14 @@ if __name__ == "__main__":
     agent = DQN_Agent(no_of_states, no_of_actions, load_old_model)
 
     # Train your agent
-    no_episodes = 400
-    environment.trainDQN(agent, no_episodes)
+    no_episodes = 100
+    visualize_agent = True
+    environment.trainDQN(agent, no_episodes, visualize_agent)
 
     # Run your agent
     no_episodes_run = 100
-    rew = environment.runDQN(agent, no_episodes_run)
+    visualize_agent = True
+    rew = environment.runDQN(agent, no_episodes_run,visualize_agent)
 
     # TODO: Implement here a function visualizing/plotting, e.g.,
     plotting = False
@@ -197,19 +204,18 @@ if __name__ == "__main__":
         plt.ylim(top=250)
         # Here you can watch a simulation on how your agent performs after being trained.
         # NOTE that this part will try to load an existing set of weights, therefore set visualize_agent to TRUE, when you
-        # already saved a set of weights from a training session
-        visualize_agent = True
-    if visualize_agent == True:
-        env = gym.make('CartPole-v0')
-        load_model = 1
-        state_size = 4
-        action_size = 2
-        agent = DQN_Agent(state_size, action_size, load_model)
-        state = env.reset().reshape(1, env.observation_space.shape[0])
-        for _ in range(1000):
-            env.render()
-            action = agent.select_action(state, training=False)
-            next_state, reward, done, _ = env.step(action)
-            next_state = next_state.reshape(1, env.observation_space.shape[0])
-            state = next_state
-        env.close()
+    #     # already saved a set of weights from a training session
+    # if visualize_agent_ == True:
+    #     env = gym.make('CartPole-v0')
+    #     load_model = 1
+    #     state_size = 4
+    #     action_size = 2
+    #     agent = DQN_Agent(state_size, action_size, load_model)
+    #     state = env.reset().reshape(1, env.observation_space.shape[0])
+    #     for _ in range(1000):
+    #         env.render()
+    #         action = agent.select_action(state, training=False)
+    #         next_state, reward, done, _ = env.step(action)
+    #         next_state = next_state.reshape(1, env.observation_space.shape[0])
+    #         state = next_state
+    #     env.close()
