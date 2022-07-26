@@ -14,6 +14,7 @@ class GymEnvironment:
     def __init__(self, env_id, monitor_dir, max_timesteps=100000):
         self.max_timesteps = max_timesteps
         self.env = gym.make(env_id)
+        self.env._max_episode_steps = 300
 
     def trainDQN(self, agent, no_episodes, visualize_agent=False):
         rew = self.runDQN(agent, no_episodes, training=True, visualize_agent=visualize_agent)
@@ -188,7 +189,7 @@ if __name__ == "__main__":
 
     # Train your agent
     no_episodes = 10000
-    visualize_agent_train = False
+    visualize_agent_train = True
     rew_train = environment.trainDQN(agent, no_episodes, visualize_agent_train)
 
     # Run your agent
