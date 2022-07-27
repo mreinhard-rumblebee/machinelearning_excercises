@@ -188,12 +188,12 @@ if __name__ == "__main__":
     agent = DQN_Agent(no_of_states, no_of_actions, load_old_model)
 
     # Train your agent
-    no_episodes = 10000
+    no_episodes = 5
     visualize_agent_train = True
     rew_train = environment.trainDQN(agent, no_episodes, visualize_agent_train)
 
     # Run your agent
-    no_episodes_run = 100
+    no_episodes_run = 5
     visualize_agent_test = False
     rew_test = environment.runDQN(agent, no_episodes_run, visualize_agent_test)
 
@@ -216,8 +216,8 @@ if __name__ == "__main__":
         ax2.plot(rew_test)
         ax2.set_title('Testing')
         ax2.set_xlabel("Episode")
-        plt.show()
         plt.savefig('Plots.png', dpi=600)
+        plt.show()
 
         # Here you can watch a simulation on how your agent performs after being trained.
         # NOTE that this part will try to load an existing set of weights, therefore set visualize_agent to TRUE, when you
