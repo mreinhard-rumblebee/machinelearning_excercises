@@ -57,7 +57,7 @@ class GymEnvironment:
             # TODO: Implement here a function that evaulates the agent's performance for every x episodes by
             # calling runDQN directly and returns an average of total rewards for 100 runs, if your objective is
             # reached, you can terminate training
-            if episode % 50 == 0 and training:
+            if episode % 50 == 0 and training and episode != 0:
                 print("-------------------------------------------")
                 print("Evaluation starts:")
                 rew_subset = self.runDQN(agent, 100, training=False, evaluation=True)
@@ -207,8 +207,9 @@ if __name__ == "__main__":
     print("-------------------------------------------")
     plotting = True
     if plotting:
+        rew_train_without_zeros = [x for x in rew_train if x != 0]
         fig, (ax1, ax2) = plt.subplots(1, 2)
-        ax1.plot(rew_train)
+        ax1.plot(rew_train_without_zeros)
         ax1.set_title('Training')
         ax1.set_xlabel("Episode")
         ax1.set_ylabel("Score")
