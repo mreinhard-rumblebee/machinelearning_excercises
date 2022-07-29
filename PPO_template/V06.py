@@ -6,11 +6,12 @@ import numpy as np
 import scipy.signal
 import seaborn as sns
 import matplotlib.pyplot as plt
+
 sns.set()
 
 
 class GymEnvironment:
-    def __init__(self, env_id, monitor_dir, max_timesteps=200):  # TODO: default max_timesteps = 400, testing: 200
+    def __init__(self, env_id, monitor_dir, max_timesteps=400):  # TODO: default max_timesteps = 400
         self.max_timesteps = max_timesteps
 
         self.env = gym.make(env_id)
@@ -51,7 +52,6 @@ class GymEnvironment:
                     next_state = next_state.reshape(1, self.env.observation_space.shape[0])
                     rew_agent += reward
 
-
                     """
                     if (done == True) or (t == self.max_timesteps-1):
                         #checking performance:
@@ -78,13 +78,14 @@ class GymEnvironment:
                         adv, G_T = agent.calc_advantage(state, rewards, values, done, t)
                         advantages = np.append(advantages, adv)
                         G_lams = np.append(G_lams, G_T)
-                        #print(f'Episode {episode} actor {n}: reward: {rew_agent} /{self.max_timesteps}')
+                        # print(f'Episode {episode} actor {n}: reward: {rew_agent} /{self.max_timesteps}')
                         break
 
                 rew_episode.append(rew_agent)
 
-            print(f'Episode {episode} finished with reward: {int(sum(rew_episode))}/{agent.actors * self.max_timesteps}')
-            rew_total.append(sum(rew_episode))
+            print(
+                f'Episode {episode} finished with reward: {int(sum(rew_episode)/agent.actors)}/{self.max_timesteps}')
+            rew_total.append(int(sum(rew_episode)/agent.actors))
 
             # TODO: If training, call function to update policy function weights using clipping
             # TODO: If training, Call function to update value function weights
@@ -110,7 +111,8 @@ class GymEnvironment:
                 #  reached, you can terminate training
         if training:
             print('Training done.')
-        print(f'Total reward after {no_episodes} episodes: {int(sum(rew_total))}/{self.max_timesteps * agent.actors * no_episodes}')
+        print(
+            f'Total reward after {no_episodes} episodes: {int(sum(rew_total)/no_episodes)}/{self.max_timesteps}')
         return rew_total
 
 
@@ -131,10 +133,10 @@ class PPO_Agent:
         self.action_size = no_of_actions
 
         # TODO: Set hyperparameters and vary them
-        self.gamma = 0.99  # discount rate, 0.9
-        self.lam = 0.95  # lambda for TD(lambda), 0.6
-        self.clip_ratio = 0.2  # Clipping ratio for calculating L_clip, 0.5
-        self.lr = 0.0003  # learning rate, default: 0.0001
+        self.clip_ratio = 0.2  # default 0.2
+        self.gamma = 0.99  # discount rate, default 0.99
+        self.lr = 0.001  # learning rate, default: 0.0001
+        self.lam = 0.95  # lambda for TD(lambda), 0.97
         self.actors = 50  # Number of parallel actors, default: 100, testing: 10
 
         self.policy_iterations = 20  # number of policy updates
@@ -185,7 +187,7 @@ class PPO_Agent:
 
         return model
 
-    #@tf.function
+    # @tf.function
     def update_policy_parameters(self, states, actions, logprobs, advantages):
 
         for _ in range(self.policy_iterations):
@@ -202,7 +204,7 @@ class PPO_Agent:
             pol_grads = tape.gradient(pol_loss, agent.actor.trainable_variables)
             agent.actor_optimizer.apply_gradients(zip(pol_grads, agent.actor.trainable_variables))
 
-    #@tf.function
+    # @tf.function
     def update_value_parameters(self, G_lams, states):
 
         for _ in range(self.value_iterations):
@@ -239,35 +241,39 @@ if __name__ == "__main__":
     no_test_agents = agent.actors
     rew_test = environment.runPPO(agent, no_episodes_run)
 
+
     # TODO: Implement here a function visualizing/plotting
 
-    def box_string(no_agents, no_episodes , rew):
+    def box_string(no_agents, no_episodes, rew):
         textstr = '\n'.join((
             f'# agents: {no_agents}',
             f'# episodes: {no_episodes}',
-            f'avg_reward: {round(np.mean(rew),2)}'
+            f'avg_reward: {round(np.mean(rew), 2)}'
         ))
 
         return textstr
 
-    def plotting(x=None, ax=None, title='', xlabel='', ylabel='', box_content = '', box_props = None):
+
+    def plotting(x=None, ax=None, title='', xlabel='', ylabel='', box_content='', box_props=None):
         if ax is None:
             ax = plt.gca()
         line, = ax.plot(x)
         ax.set_title(title)
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
-        ax.text(.56,.12,box_content, transform=ax.transAxes,fontsize=14,verticalalignment='top',bbox=box_props)
+        ax.text(.56, .12, box_content, transform=ax.transAxes, fontsize=14, verticalalignment='top', bbox=box_props)
 
         return line
 
+
     # plot training and reward next to each other
-    props = dict(boxstyle='round', facecolor='lightsteelblue',alpha=.7)
+    props = dict(boxstyle='round', facecolor='lightsteelblue', alpha=.7)
 
-    f, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, figsize=(10, 8))
-    plotting(rew_train, ax=ax1, title='Training', xlabel='episode', ylabel='reward', box_content=box_string(no_train_agents,no_episodes,rew_train), box_props = props)
-    plotting(rew_test, ax=ax2, title='Testing', xlabel='episode', ylabel='reward', box_content=box_string(no_test_agents,no_episodes_run ,rew_test), box_props = props)
+    f, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, figsize=(10, 8), sharey=True)
+    plotting(rew_train, ax=ax1, title='Training', xlabel='episode', ylabel='reward',
+             box_content=box_string(no_train_agents, no_episodes, rew_train), box_props=props)
+    plotting(rew_test, ax=ax2, title='Testing', xlabel='episode',
+             box_content=box_string(no_test_agents, no_episodes_run, rew_test), box_props=props)
     plt.tight_layout()
-    plt.savefig('plot_3.png', dpi = 600)
+    plt.savefig('plot_4.png', dpi=600)
     plt.show()
-
