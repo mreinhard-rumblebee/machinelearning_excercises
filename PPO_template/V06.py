@@ -231,7 +231,7 @@ if __name__ == "__main__":
     no_train_agents = agent.actors
 
     # Train your agent
-    no_episodes = 50  # TODO: Play around with this number, default: 500, testing: 10
+    no_episodes = 500  # TODO: Play around with this number, default: 500, testing: 10
     rew_train = environment.trainPPO(agent, no_episodes)
 
     # Run your agent
@@ -275,5 +275,5 @@ if __name__ == "__main__":
     plotting(rew_test, ax=ax2, title='Testing', xlabel='episode',
              box_content=box_string(no_test_agents, no_episodes_run, rew_test), box_props=props)
     plt.tight_layout()
-    plt.savefig('plot_4.png', dpi=600)
+    plt.savefig('plot_5.png', dpi=600)
     plt.show()
