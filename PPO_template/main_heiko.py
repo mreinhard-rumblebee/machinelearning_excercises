@@ -246,5 +246,5 @@ if __name__ == "__main__":
 # https://github.com/pythonlessons/Reinforcement_Learning/blob/master/11_Pong-v0_PPO/Pong-v0_PPO_TF2.py
 # https://towardsdatascience.com/understanding-and-implementing-proximal-policy-optimization-schulman-et-al-2017-9523078521ce
 # https://medium.com/intro-to-artificial-intelligence/the-actor-critic-reinforcement-learning-algorithm-c8095a655c14
-#https://medium.com/intro-to-artificial-intelligence/proximal-policy-optimization-ppo-a-policy-based-reinforcement-learning-algorithm-3cf126a7562d
-#https://keras.io/examples/rl/ppo_cartpole/
+# https://medium.com/intro-to-artificial-intelligence/proximal-policy-optimization-ppo-a-policy-based-reinforcement-learning-algorithm-3cf126a7562d
+# https://keras.io/examples/rl/ppo_cartpole/
