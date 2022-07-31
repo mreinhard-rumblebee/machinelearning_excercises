@@ -169,8 +169,8 @@ class PPO_Agent:
             return model
 
         input_layer = layers.Input(shape=(state_size,))
-        layer_1 = layers.Dense(128, activation="relu")(input_layer)
-        layer_2 = layers.Dense(128, activation="relu")(layer_1)
+        layer_1 = layers.Dense(128, activation="selu")(input_layer)
+        layer_2 = layers.Dense(128, activation="selu")(layer_1)
         output_layer = layers.Dense(output_size, activation="linear")(layer_2)
         model = keras.Model(inputs=input_layer, outputs=output_layer)
 
@@ -220,7 +220,7 @@ if __name__ == "__main__":
     no_train_agents = agent.actors
 
     # Train your agent
-    no_episodes = 20  # TODO: Play around with this number, default: 500, testing: 10
+    no_episodes = 75  # TODO: Play around with this number, default: 500, testing: 10
     rew_train = environment.trainPPO(agent, no_episodes, visualize_agent=visualize_agent_train)
 
     # Run your agent
@@ -235,7 +235,8 @@ if __name__ == "__main__":
         textstr = '\n'.join((
             f'# agents: {no_agents}',
             f'# episodes: {no_episodes}',
-            f'avg_reward: {round(np.mean(rew), 2)}'
+            f'avg_reward: {round(np.mean(rew), 2)}',
+            f'std_reward: {round(np.std(rew), 2)}'
         ))
 
         return textstr
@@ -248,7 +249,7 @@ if __name__ == "__main__":
         ax.set_title(title)
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
-        ax.text(.56, .12, box_content, transform=ax.transAxes, fontsize=14, verticalalignment='top', bbox=box_props)
+        ax.text(.56, .14, box_content, transform=ax.transAxes, fontsize=14, verticalalignment='top', bbox=box_props)
 
         return line
 
@@ -261,5 +262,5 @@ if __name__ == "__main__":
     plotting(rew_test, ax=ax2, title='Testing', xlabel='episode',
              box_content=box_string(no_test_agents, no_episodes_run, rew_test), box_props=props)
     plt.tight_layout()
-    plt.savefig('PPO_1.png', dpi=600)
+    plt.savefig('PPO_14.png', dpi=600)
     plt.show()
