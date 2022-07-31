@@ -44,10 +44,14 @@ class GymEnvironment:
                     reward = reward
                 else:
                     reward = -100
+                # in case of training record the observed tuple and adjust the epsilon rate that determines greedy behavior
                 if training:
                     agent.record(state, action, reward, next_state, done)
+                    agent.update_epsilon()
+                # Set next state as current state to prepare for next state action pair
                 state = next_state
                 i += 1
+                # update weights in case of training every 10 time steps
                 if training:
                     agent.update_weights(i)
                 if done:
@@ -106,10 +110,10 @@ class DQN_Agent:
     def nn_model(self, state_size, action_size, load_old_model):
         # TODO: Define your neural network
         layer_input = Input(state_size)
-        layer_one = Dense(512, input_shape=state_size, activation="relu", kernel_initializer='he_uniform')(layer_input)
-        layer_two = Dense(250, activation="relu", kernel_initializer='he_uniform')(layer_one)
-        layer_three = Dense(30, activation="relu", kernel_initializer='he_uniform')(layer_two)
-        layer_four = Dense(action_size, activation="linear", kernel_initializer='he_uniform')(layer_three)
+        layer_one = Dense(512, input_shape=state_size, activation="relu")(layer_input)
+        layer_two = Dense(250, activation="relu")(layer_one)
+        layer_three = Dense(30, activation="relu")(layer_two)
+        layer_four = Dense(action_size, activation="linear")(layer_three)
 
         model = Model(inputs=layer_input, outputs=layer_four)
         model.compile(loss="mse", optimizer=tf.keras.optimizers.Adam(lr=0.00025), metrics=["accuracy"])
@@ -123,53 +127,63 @@ class DQN_Agent:
     def select_action(self, state, training=True):
         # TODO: Define the action selection. Don't forget to ensure exploration in case of training.
         if training:
-            if np.random.random() <= self.epsilon:
-                return random.randrange(self.action_size)
+            random_nr = np.random.random()
+            if random_nr <= self.epsilon:
+                act = random.randrange(self.action_size)
             else:
-                return np.argmax(self.model.predict(state))
+                act = np.argmax(self.model.predict(state))
         else:
-            return np.argmax(self.model.predict(state))
+            act = np.argmax(self.model.predict(state))
+        return act
 
     # Here newly observed transitions are stored in the experience replay buffer
-    # TODO maybe implement dynamic epsilon
     def record(self, state, action, reward, next_state, done):
         self.memory.append((state, action, reward, next_state, done))
+
+    # update epsilon as long as its larger than our minvalue
+    def update_epsilon(self):
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
 
     def update_weights(self, t):  # t for time step at wich target model will be updated
         # TODO: Define the function to update weights of your network
+        #check whether there is enough samples for the minibatch
         if len(self.memory) < self.batch_size:
             return
         # Randomly sample minibatch from the memory
-        minibatch = random.sample(self.memory, min(self.batch_size, self.batch_size))
+        minibatch = random.sample(self.memory, self.batch_size)
+        #Initialze Lists for Minibatch storage for each element stored in a sample
         state = np.zeros((self.batch_size, self.state_size))
         next_state = np.zeros((self.batch_size, self.state_size))
         action, reward, done = [], [], []
 
-        for i in range(self.batch_size):
-            state[i] = minibatch[i][0]
-            action.append(minibatch[i][1])
-            reward.append(minibatch[i][2])
-            next_state[i] = minibatch[i][3]
-            done.append(minibatch[i][4])
+        index = 0
+        while index < self.batch_size:
+            sample = minibatch[index]
+            state[index] = sample[0]
+            action.append(sample[1])
+            reward.append(sample[2])
+            next_state[index] = sample[3]
+            done.append(sample[4])
+            index += 1
 
         # predict the whole batch
         target = self.model.predict(state)
         target_next = self.model.predict(next_state)
-        target_val = self.target_model.predict(next_state)
+        target_next_target_model = self.target_model.predict(next_state)
 
-        for i in range(self.batch_size):
-            if done[i]:
-                target[i][action[i]] = reward[i]
+        index = 0
+        while index < self.batch_size:
+            if not done[index]:
+                target[index][action[index]] = reward[index] + self.gamma * (target_next_target_model[index][np.argmax(target_next[index])])
             else:
-                a = np.argmax(target_next[i])
-                # target Q Network evaluates the action
-                target[i][action[i]] = reward[i] + self.gamma * (target_val[i][a])
+                target[index][action[index]] = reward[index]
+            index += 1
 
         # fit model
         self.model.fit(state, target, batch_size=self.batch_size, verbose=0)
 
+        #update target model each target_model_time time steps
         if (t % self.target_model_time) == 0:
             self.target_model.set_weights(self.model.get_weights())
 
@@ -188,12 +202,12 @@ if __name__ == "__main__":
     agent = DQN_Agent(no_of_states, no_of_actions, load_old_model)
 
     # Train your agent
-    no_episodes = 5
+    no_episodes = 100
     visualize_agent_train = True
     rew_train = environment.trainDQN(agent, no_episodes, visualize_agent_train)
 
     # Run your agent
-    no_episodes_run = 5
+    no_episodes_run = 100
     visualize_agent_test = False
     rew_test = environment.runDQN(agent, no_episodes_run, visualize_agent_test)
 
