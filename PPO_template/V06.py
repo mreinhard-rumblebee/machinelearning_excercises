@@ -15,19 +15,17 @@ class GymEnvironment:
         self.max_timesteps = max_timesteps
 
         self.env = gym.make(env_id)
-        # TODO: Optional: change environment timesteps beyond default of 200 to increase performance beyond 400 timesteps
-        # self.env._max_episode_steps = self.max_timesteps
 
-    def trainPPO(self, agent, no_episodes, visualize_agent=False):
-        rew = self.runPPO(agent, no_episodes, training=True, visualize_agent=visualize_agent)
+    def trainPPO(self, agent, no_episodes):
+        rew = self.runPPO(agent, no_episodes, training=True)
 
-        # automatically save current model
+        # automatically save model
         agent.actor.save_weights('cartpole_v0_PPO_actor.h5', overwrite=True)
         agent.critic.save_weights('cartpole_v0_PPO_critic.h5', overwrite=True)
 
         return rew
 
-    def runPPO(self, agent, no_episodes, training=False, visualize_agent=False):
+    def runPPO(self, agent, no_episodes, training=False):
 
         rew_total = []
         for episode in range(no_episodes):
@@ -35,7 +33,7 @@ class GymEnvironment:
             actions = np.zeros(agent.actors * self.max_timesteps, dtype=np.int32)
             logprobs = np.zeros(agent.actors * self.max_timesteps, dtype=np.float32)
             advantages = []
-            G_t = []
+            G_lams = []
             storage_counter = 0
             rew_episode = []
 
@@ -45,9 +43,8 @@ class GymEnvironment:
                 values = np.zeros(self.max_timesteps)
                 rewards = np.zeros(self.max_timesteps + 1)
                 for t in range(self.max_timesteps):
-
-                    if visualize_agent:
-                        self.env.render()
+                    # TODO: Fill out the respective to-dos in this loop and make sure that the overall algorithm works,
+                    #  e.g., overwrite current state with next state entering a new time step
 
                     logit, action = agent.select_action(state)
                     next_state, reward, done, _ = self.env.step(action.numpy()[0])
@@ -55,7 +52,16 @@ class GymEnvironment:
                     next_state = next_state.reshape(1, self.env.observation_space.shape[0])
                     rew_agent += reward
 
+                    """
+                    if (done == True) or (t == self.max_timesteps-1):
+                        #checking performance:
+                        print(f'Episode {episode} actor {n}: reward: {tot_rew} /{self.max_timesteps}')
+                    """
+
+                    # print(f'state: {type(state)}, {state}')
                     if training == True:
+                        # TODO: Store relevant transition information such as rewards, values, etc. that you will need in
+                        #  the calculation of the advantages later
                         states[storage_counter] = state
                         actions[storage_counter] = action
 
@@ -68,41 +74,45 @@ class GymEnvironment:
 
                     if ((done == True) or (t == self.max_timesteps - 1)) and (training == True):
                         # Calculate advantages when the function breaks or the last iteration is reached
-                        adv, G_t_local = agent.calc_advantage(state, rewards, values, done, t)
+                        # TODO: Call function for calculation and storage of advantages
+                        adv, G_T = agent.calc_advantage(state, rewards, values, done, t)
                         advantages = np.append(advantages, adv)
-                        G_t = np.append(G_t, G_t_local)
+                        G_lams = np.append(G_lams, G_T)
                         # print(f'Episode {episode} actor {n}: reward: {rew_agent} /{self.max_timesteps}')
                         break
 
                 rew_episode.append(rew_agent)
 
             print(
-                f'Episode {episode} of {no_episodes} finished with reward: {int(sum(rew_episode) / agent.actors)}/{self.max_timesteps}')
-            rew_total.append(int(sum(rew_episode) / agent.actors))
+                f'Episode {episode} finished with reward: {int(sum(rew_episode)/agent.actors)}/{self.max_timesteps}')
+            rew_total.append(int(sum(rew_episode)/agent.actors))
 
+            # TODO: If training, call function to update policy function weights using clipping
+            # TODO: If training, Call function to update value function weights
             if training == True:
                 # convert to tf tensors
-                G_t = tf.convert_to_tensor(G_t, dtype=tf.float32)
+                G_lams = tf.convert_to_tensor(G_lams, dtype=tf.float32)
                 advantages = tf.convert_to_tensor(advantages, dtype=tf.float32)
                 advantages = (advantages - np.mean(advantages)) / np.std(advantages)
 
-                # truncate to length of G_t
-                states = states[0:len(G_t)]
-                actions = actions[0:len(G_t)]
-                logprobs = logprobs[0:len(G_t)]
+                states = states[0:len(G_lams)]
+                actions = actions[0:len(G_lams)]
+                logprobs = logprobs[0:len(G_lams)]
 
                 # convert to tf tensors
                 states = tf.convert_to_tensor(states)
                 actions = tf.convert_to_tensor(actions)
                 logprobs = tf.convert_to_tensor(logprobs)
 
-                # update policy and value parameters
                 agent.update_policy_parameters(states, actions, logprobs, advantages)
-                agent.update_value_parameters(G_t, states)
+                agent.update_value_parameters(G_lams, states)
+                # TODO: Implement here a function that evaulates the agent's performance for every x episodes by
+                #  calling PPO directly and returns an average of total rewards for 100 runs, if your objective is
+                #  reached, you can terminate training
         if training:
             print('Training done.')
         print(
-            f'Total reward after all {no_episodes} episodes: {int(sum(rew_total) / no_episodes)}/{self.max_timesteps}')
+            f'Total reward after {no_episodes} episodes: {int(sum(rew_total)/no_episodes)}/{self.max_timesteps}')
         return rew_total
 
 
@@ -123,46 +133,44 @@ class PPO_Agent:
         self.action_size = no_of_actions
 
         # TODO: Set hyperparameters and vary them
-        self.clip_ratio = 0.2  # clipping rate, default 0.2
+        self.clip_ratio = 0.2  # default 0.2
         self.gamma = 0.99  # discount rate, default 0.99
-        self.lr = 0.001  # learning rate, (0.1, 0.001, 0.0003, 0.0001)
-        self.lam = 0.95  # lambda for TD(lambda), (0.99, 0.97, 0.95)
-        self.actors = 25  # number of actors, (50, 25)
+        self.lr = 0.001  # learning rate, default: 0.0001
+        self.lam = 0.95  # lambda for TD(lambda), 0.97
+        self.actors = 50  # Number of parallel actors, default: 100, testing: 10
 
         self.policy_iterations = 20  # number of policy updates
         self.value_iterations = 20  # number of value updates
 
-        # initialize NNs
         self.actor = self.nn_model(self.state_size, self.action_size)
         self.actor_optimizer = keras.optimizers.Adam(learning_rate=self.lr)
         self.critic = self.nn_model(self.state_size, 1)
         self.critic_optimizer = keras.optimizers.Adam(learning_rate=self.lr)
 
     def select_action(self, state):
+        # TODO: Implement action selection, i.e., sample an action from policy pi
         logit = agent.actor(state)
         action = tf.squeeze(tf.random.categorical(logit, 1), axis=1)
         return logit, action
 
     def calc_advantage(self, state, rewards, values, done, t):
+        # TODO: Implement here the calculation of the advantage, e.g., using TD-lambda or eligibility traces
         # Using offline forward-looking TD(lambda) with one update per episode
         rewards = rewards[:t + 1]
         values = values[:t + 1]
+        T_deltas = rewards + agent.gamma * values - values
+        adv = discounted_cumulative_sums(T_deltas, agent.gamma * agent.lam)
         if done == True:
-            values = np.array(np.append(values, 0))
+            rewards = np.array(np.append(rewards, 0))
         else:
-            values = np.array(np.append(values, agent.critic(state)[0]))
-        TD_delta = rewards + agent.gamma * values[1:] - values[:-1]
-        adv = discounted_cumulative_sums(TD_delta, agent.gamma * agent.lam)
-
-        if done == False:
             rewards = np.array(np.append(rewards, agent.critic(state)[0]))
-            G_t_local = discounted_cumulative_sums(rewards, agent.gamma)[:-1]
-        else:
-            G_t_local = discounted_cumulative_sums(rewards, agent.gamma)
+        G_T = discounted_cumulative_sums(rewards, agent.gamma)[:-1]
 
-        return adv, G_t_local
+        return adv, G_T
 
     def nn_model(self, state_size, output_size, load_old_model=False):
+        # TODO: Define the neural network here, make sure that you account for the different requirements of the value
+
         # If you already have a set of weights from previous training, you can load them here
         if load_old_model:
             if output_size == 1:
@@ -171,11 +179,10 @@ class PPO_Agent:
                 model = self.actor.load_weights("cartpole_v0_PPO_actor.h5")
             return model
 
-        # TODO: vary activation function (relu, tanh, selu)
         input_layer = layers.Input(shape=(state_size,))
-        layer_1 = layers.Dense(128, activation="selu")(input_layer)
-        layer_2 = layers.Dense(128, activation="selu")(layer_1)
-        output_layer = layers.Dense(output_size, activation="linear")(layer_2)
+        layer_1 = layers.Dense(64, activation="tanh")(input_layer)
+        layer_2 = layers.Dense(64, activation="tanh")(layer_1)
+        output_layer = layers.Dense(output_size, activation="tanh")(layer_2)
         model = keras.Model(inputs=input_layer, outputs=output_layer)
 
         return model
@@ -185,7 +192,11 @@ class PPO_Agent:
 
         for _ in range(self.policy_iterations):
             with tf.GradientTape() as tape:  # Record operations for automatic differentiation.
+                # TODO: Use the advantages and calculated policies to calculated the clipping function here and calculate
+                #  the loss function
                 ratio = tf.exp(policy_probabilities(agent.actor(states), actions) - logprobs)
+                # min_advantage = tf.where(advantages > 0, (1 + self.clip_ratio) * advantages, (1 - self.clip_ratio) * advantages,)
+                # pol_loss = -tf.reduce_mean(tf.minimum(ratio * advantages, min_advantage))
                 clip = keras.backend.clip(ratio, min_value=1 - self.clip_ratio,
                                           max_value=1 + self.clip_ratio) * advantages
                 pol_loss = -keras.backend.mean(tf.minimum(ratio * advantages, clip))
@@ -194,11 +205,14 @@ class PPO_Agent:
             agent.actor_optimizer.apply_gradients(zip(pol_grads, agent.actor.trainable_variables))
 
     # @tf.function
-    def update_value_parameters(self, G_t, states):
+    def update_value_parameters(self, G_lams, states):
 
         for _ in range(self.value_iterations):
             with tf.GradientTape() as tape:  # Record operations for automatic differentiation.
-                val_loss = tf.keras.metrics.mean_squared_error(G_t, agent.critic(states))
+                # TODO: Use the advantages and calculated policies to calculated the clipping function here and calculate
+                #  the loss function
+                # val_loss = tf.reduce_mean((G_lams - agent.critic(states)) ** 2)
+                val_loss = tf.keras.metrics.mean_squared_error(G_lams, agent.critic(states))
             val_grads = tape.gradient(val_loss, agent.critic.trainable_variables)
             agent.critic_optimizer.apply_gradients(zip(val_grads, agent.critic.trainable_variables))
 
@@ -206,42 +220,40 @@ class PPO_Agent:
 if __name__ == "__main__":
     environment = GymEnvironment('CartPole-v0', 'gymresults/cartpole-v0')
 
-    no_of_states = 4  # [position of cart, velocity of cart, angle of pole, rotation rate of pole]
-    no_of_actions = 2  # [left, right]
+    no_of_states = 4  # TODO: Define number of states # [position of cart, velocity of cart, angle of pole, rotation rate of pole]
+    no_of_actions = 2  # TODO: Define number of actions # [left, right]
 
-    # load weights of an already trained model
+    # If you want to load weights of an already trained model, set to True
     load_old_model = False
-
-    # render agent visualization during training/testing
-    visualize_agent_train = False
-    visualize_agent_test = False
 
     # The agent is initialized
     agent = PPO_Agent(no_of_states, no_of_actions, load_old_model=load_old_model)
     no_train_agents = agent.actors
 
     # Train your agent
-    no_episodes = 100  # TODO: Play around with this number, default: 100, testing: 50
-    rew_train = environment.trainPPO(agent, no_episodes, visualize_agent=visualize_agent_train)
+    no_episodes = 500  # TODO: Play around with this number, default: 500, testing: 10
+    rew_train = environment.trainPPO(agent, no_episodes)
 
     # Run your agent
     no_episodes_run = 100  # TODO: Play around with this number, default: 100, testing: 10
     # This is set to one here as multiple actors are only required for training
     agent.actors = 1
     no_test_agents = agent.actors
-    rew_test = environment.runPPO(agent, no_episodes_run, visualize_agent=visualize_agent_test)
+    rew_test = environment.runPPO(agent, no_episodes_run)
 
-    # function for creation of plot info-box
+
+    # TODO: Implement here a function visualizing/plotting
+
     def box_string(no_agents, no_episodes, rew):
         textstr = '\n'.join((
             f'# agents: {no_agents}',
             f'# episodes: {no_episodes}',
-            f'avg_reward: {round(np.mean(rew), 2)}',
-            f'std_reward: {round(np.std(rew), 2)}'))
+            f'avg_reward: {round(np.mean(rew), 2)}'
+        ))
 
         return textstr
 
-    # function for plotting subplots
+
     def plotting(x=None, ax=None, title='', xlabel='', ylabel='', box_content='', box_props=None):
         if ax is None:
             ax = plt.gca()
@@ -249,11 +261,12 @@ if __name__ == "__main__":
         ax.set_title(title)
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
-        ax.text(.56, .14, box_content, transform=ax.transAxes, fontsize=14, verticalalignment='top', bbox=box_props)
+        ax.text(.56, .12, box_content, transform=ax.transAxes, fontsize=14, verticalalignment='top', bbox=box_props)
 
         return line
 
-    # plot training and testing rewards next to each other
+
+    # plot training and reward next to each other
     props = dict(boxstyle='round', facecolor='lightsteelblue', alpha=.7)
 
     f, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, figsize=(10, 8), sharey=True)
@@ -262,6 +275,5 @@ if __name__ == "__main__":
     plotting(rew_test, ax=ax2, title='Testing', xlabel='episode',
              box_content=box_string(no_test_agents, no_episodes_run, rew_test), box_props=props)
     plt.tight_layout()
-    # TODO: Optional: Save image of plot to current working directory
-    # plt.savefig('PPO_eval_plot_1.png', dpi=600)
+    plt.savefig('plot_5.png', dpi=600)
     plt.show()

@@ -15,19 +15,19 @@ class GymEnvironment:
         self.max_timesteps = max_timesteps
 
         self.env = gym.make(env_id)
-        # TODO: Optional: change environment timesteps beyond default of 200 to increase performance beyond 400 timesteps
-        # self.env._max_episode_steps = self.max_timesteps
+        # change default timesteps from 200 to max_timesteps
+        #self.env._max_episode_steps = self.max_timesteps
 
-    def trainPPO(self, agent, no_episodes, visualize_agent=False):
+    def trainPPO(self, agent, no_episodes, visualize_agent = False):
         rew = self.runPPO(agent, no_episodes, training=True, visualize_agent=visualize_agent)
 
-        # automatically save current model
+        # automatically save model
         agent.actor.save_weights('cartpole_v0_PPO_actor.h5', overwrite=True)
         agent.critic.save_weights('cartpole_v0_PPO_critic.h5', overwrite=True)
 
         return rew
 
-    def runPPO(self, agent, no_episodes, training=False, visualize_agent=False):
+    def runPPO(self, agent, no_episodes, training=False, visualize_agent = False):
 
         rew_total = []
         for episode in range(no_episodes):
@@ -77,7 +77,7 @@ class GymEnvironment:
                 rew_episode.append(rew_agent)
 
             print(
-                f'Episode {episode} of {no_episodes} finished with reward: {int(sum(rew_episode) / agent.actors)}/{self.max_timesteps}')
+                f'Episode {episode} finished with reward: {int(sum(rew_episode) / agent.actors)}/{self.max_timesteps}')
             rew_total.append(int(sum(rew_episode) / agent.actors))
 
             if training == True:
@@ -86,7 +86,6 @@ class GymEnvironment:
                 advantages = tf.convert_to_tensor(advantages, dtype=tf.float32)
                 advantages = (advantages - np.mean(advantages)) / np.std(advantages)
 
-                # truncate to length of G_t
                 states = states[0:len(G_t)]
                 actions = actions[0:len(G_t)]
                 logprobs = logprobs[0:len(G_t)]
@@ -96,13 +95,12 @@ class GymEnvironment:
                 actions = tf.convert_to_tensor(actions)
                 logprobs = tf.convert_to_tensor(logprobs)
 
-                # update policy and value parameters
                 agent.update_policy_parameters(states, actions, logprobs, advantages)
                 agent.update_value_parameters(G_t, states)
         if training:
             print('Training done.')
         print(
-            f'Total reward after all {no_episodes} episodes: {int(sum(rew_total) / no_episodes)}/{self.max_timesteps}')
+            f'Total reward after {no_episodes} episodes: {int(sum(rew_total) / no_episodes)}/{self.max_timesteps}')
         return rew_total
 
 
@@ -123,16 +121,15 @@ class PPO_Agent:
         self.action_size = no_of_actions
 
         # TODO: Set hyperparameters and vary them
-        self.clip_ratio = 0.2  # clipping rate, default 0.2
+        self.clip_ratio = 0.2  # default 0.2
         self.gamma = 0.99  # discount rate, default 0.99
-        self.lr = 0.001  # learning rate, (0.1, 0.001, 0.0003, 0.0001)
-        self.lam = 0.95  # lambda for TD(lambda), (0.99, 0.97, 0.95)
-        self.actors = 25  # number of actors, (50, 25)
+        self.lr = 0.001  # learning rate, default: 0.0001
+        self.lam = 0.95  # lambda for TD(lambda), 0.97
+        self.actors = 25  # Number of parallel actors, default: 100, testing: 10
 
         self.policy_iterations = 20  # number of policy updates
         self.value_iterations = 20  # number of value updates
 
-        # initialize NNs
         self.actor = self.nn_model(self.state_size, self.action_size)
         self.actor_optimizer = keras.optimizers.Adam(learning_rate=self.lr)
         self.critic = self.nn_model(self.state_size, 1)
@@ -171,7 +168,6 @@ class PPO_Agent:
                 model = self.actor.load_weights("cartpole_v0_PPO_actor.h5")
             return model
 
-        # TODO: vary activation function (relu, tanh, selu)
         input_layer = layers.Input(shape=(state_size,))
         layer_1 = layers.Dense(128, activation="selu")(input_layer)
         layer_2 = layers.Dense(128, activation="selu")(layer_1)
@@ -186,6 +182,8 @@ class PPO_Agent:
         for _ in range(self.policy_iterations):
             with tf.GradientTape() as tape:  # Record operations for automatic differentiation.
                 ratio = tf.exp(policy_probabilities(agent.actor(states), actions) - logprobs)
+                # min_advantage = tf.where(advantages > 0, (1 + self.clip_ratio) * advantages, (1 - self.clip_ratio) * advantages,)
+                # pol_loss = -tf.reduce_mean(tf.minimum(ratio * advantages, min_advantage))
                 clip = keras.backend.clip(ratio, min_value=1 - self.clip_ratio,
                                           max_value=1 + self.clip_ratio) * advantages
                 pol_loss = -keras.backend.mean(tf.minimum(ratio * advantages, clip))
@@ -198,6 +196,7 @@ class PPO_Agent:
 
         for _ in range(self.value_iterations):
             with tf.GradientTape() as tape:  # Record operations for automatic differentiation.
+                # val_loss = tf.reduce_mean((G_t - agent.critic(states)) ** 2)
                 val_loss = tf.keras.metrics.mean_squared_error(G_t, agent.critic(states))
             val_grads = tape.gradient(val_loss, agent.critic.trainable_variables)
             agent.critic_optimizer.apply_gradients(zip(val_grads, agent.critic.trainable_variables))
@@ -221,7 +220,7 @@ if __name__ == "__main__":
     no_train_agents = agent.actors
 
     # Train your agent
-    no_episodes = 100  # TODO: Play around with this number, default: 100, testing: 50
+    no_episodes = 75  # TODO: Play around with this number, default: 500, testing: 10
     rew_train = environment.trainPPO(agent, no_episodes, visualize_agent=visualize_agent_train)
 
     # Run your agent
@@ -231,13 +230,14 @@ if __name__ == "__main__":
     no_test_agents = agent.actors
     rew_test = environment.runPPO(agent, no_episodes_run, visualize_agent=visualize_agent_test)
 
-    # function for creation of plot info-box
+    # function for plot legend creation
     def box_string(no_agents, no_episodes, rew):
         textstr = '\n'.join((
             f'# agents: {no_agents}',
             f'# episodes: {no_episodes}',
             f'avg_reward: {round(np.mean(rew), 2)}',
-            f'std_reward: {round(np.std(rew), 2)}'))
+            f'std_reward: {round(np.std(rew), 2)}'
+        ))
 
         return textstr
 
@@ -253,7 +253,7 @@ if __name__ == "__main__":
 
         return line
 
-    # plot training and testing rewards next to each other
+    # plot training and reward next to each other
     props = dict(boxstyle='round', facecolor='lightsteelblue', alpha=.7)
 
     f, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, figsize=(10, 8), sharey=True)
@@ -262,6 +262,5 @@ if __name__ == "__main__":
     plotting(rew_test, ax=ax2, title='Testing', xlabel='episode',
              box_content=box_string(no_test_agents, no_episodes_run, rew_test), box_props=props)
     plt.tight_layout()
-    # TODO: Optional: Save image of plot to current working directory
-    # plt.savefig('PPO_eval_plot_1.png', dpi=600)
+    plt.savefig('PPO_14.png', dpi=600)
     plt.show()
