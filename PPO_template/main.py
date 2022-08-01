@@ -231,6 +231,7 @@ if __name__ == "__main__":
     no_test_agents = agent.actors
     rew_test = environment.runPPO(agent, no_episodes_run, visualize_agent=visualize_agent_test)
 
+
     # function for creation of plot info-box
     def box_string(no_agents, no_episodes, rew):
         textstr = '\n'.join((
@@ -240,6 +241,7 @@ if __name__ == "__main__":
             f'std_reward: {round(np.std(rew), 2)}'))
 
         return textstr
+
 
     # function for plotting subplots
     def plotting(x=None, ax=None, title='', xlabel='', ylabel='', box_content='', box_props=None):
@@ -252,6 +254,7 @@ if __name__ == "__main__":
         ax.text(.56, .14, box_content, transform=ax.transAxes, fontsize=14, verticalalignment='top', bbox=box_props)
 
         return line
+
 
     # plot training and testing rewards next to each other
     props = dict(boxstyle='round', facecolor='lightsteelblue', alpha=.7)

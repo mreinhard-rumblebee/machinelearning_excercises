@@ -32,7 +32,7 @@ class GymEnvironment:
             i = 0
             rwd = 0
             while not done:
-                #possibility to visualize training or testing
+                # possibility to visualize training or testing
                 if visualize_agent:
                     self.env.render()
                 action = agent.select_action(state)
@@ -147,12 +147,12 @@ class DQN_Agent:
 
     def update_weights(self, t):  # t for time step at wich target model will be updated
         # TODO: Define the function to update weights of your network
-        #check whether there is enough samples for the minibatch
+        # check whether there is enough samples for the minibatch
         if len(self.memory) < self.batch_size:
             return
         # Randomly sample minibatch from the memory
         minibatch = random.sample(self.memory, self.batch_size)
-        #Initialze Lists for Minibatch storage for each element stored in a sample
+        # Initialze Lists for Minibatch storage for each element stored in a sample
         state = np.zeros((self.batch_size, self.state_size))
         next_state = np.zeros((self.batch_size, self.state_size))
         action, reward, done = [], [], []
@@ -175,7 +175,8 @@ class DQN_Agent:
         index = 0
         while index < self.batch_size:
             if not done[index]:
-                target[index][action[index]] = reward[index] + self.gamma * (target_next_target_model[index][np.argmax(target_next[index])])
+                target[index][action[index]] = reward[index] + self.gamma * (
+                target_next_target_model[index][np.argmax(target_next[index])])
             else:
                 target[index][action[index]] = reward[index]
             index += 1
@@ -183,7 +184,7 @@ class DQN_Agent:
         # fit model
         self.model.fit(state, target, batch_size=self.batch_size, verbose=0)
 
-        #update target model each target_model_time time steps
+        # update target model each target_model_time time steps
         if (t % self.target_model_time) == 0:
             self.target_model.set_weights(self.model.get_weights())
 
