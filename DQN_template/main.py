@@ -202,14 +202,14 @@ if __name__ == "__main__":
     agent = DQN_Agent(no_of_states, no_of_actions, load_old_model)
 
     # Train your agent
-    no_episodes = 100
+    no_episodes = 200
     visualize_agent_train = True
-    rew_train = environment.trainDQN(agent, no_episodes, visualize_agent_train)
+    rew_train = environment.trainDQN(agent, no_episodes, visualize_agent=visualize_agent_train)
 
     # Run your agent
     no_episodes_run = 100
     visualize_agent_test = False
-    rew_test = environment.runDQN(agent, no_episodes_run, visualize_agent_test)
+    rew_test = environment.runDQN(agent, no_episodes_run, visualize_agent=visualize_agent_test)
 
     # TODO: Implement here a function visualizing/plotting, e.g.,
     print("-------------------------------------------")
