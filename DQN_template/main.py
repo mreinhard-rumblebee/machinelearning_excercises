@@ -202,7 +202,7 @@ if __name__ == "__main__":
     agent = DQN_Agent(no_of_states, no_of_actions, load_old_model)
 
     # Train your agent
-    no_episodes = 200
+    no_episodes = 100
     visualize_agent_train = True
     rew_train = environment.trainDQN(agent, no_episodes, visualize_agent=visualize_agent_train)
 
