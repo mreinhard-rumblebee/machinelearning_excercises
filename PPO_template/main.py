@@ -221,7 +221,7 @@ if __name__ == "__main__":
     no_train_agents = agent.actors
 
     # Train your agent
-    no_episodes = 100  # TODO: Play around with this number, default: 50, testing: 25
+    no_episodes = 100  # TODO: Play around with this number, default: 100, testing: 50
     rew_train = environment.trainPPO(agent, no_episodes, visualize_agent=visualize_agent_train)
 
     # Run your agent
